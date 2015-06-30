@@ -1,3 +1,6 @@
+# Version update
+- Implement unittest structure
+
 # Missing values estimation
 The scripts in this folder provide functions to perform estimation for missing data.
 The process is divided in two main steps:
