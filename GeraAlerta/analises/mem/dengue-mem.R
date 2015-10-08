@@ -1,3 +1,13 @@
+'''
+Reads historical incidence data and extract epidemic thresholds per AP,
+using MEM package https://cran.r-project.org/web/packages/mem/
+
+:apsids: list with APs name.
+:epithresholds: list with full epimem report for each ap, in the same order as apsids
+:dfthresholds: dataframe with epidemic threhsold per AP, with pre, pos, mid, high and very high
+               intensity thresholds
+'''
+
 library(mem)
 library(plyr)
 
@@ -38,12 +48,18 @@ epithresholds <- NULL
 dfthresholds <- data.frame(apsids)
 dfthresholds <- rename(dfthresholds, c('apsids'='aps'))
 dfthresholds['pre'] <- NULL
+dfthresholds['pos'] <- NULL
+dfthresholds['mid'] <- NULL
+dfthresholds['high'] <- NULL
+dfthresholds['veryhigh'] <- NULL
 for (aps in apsids){
   # Firstly, use all seasons
   epitmp <- epimem(i.data=subset(dfsimple[dfsimple$APS==as.character(aps),], select=seasons),
                    i.n.max=10, i.level=0.60, i.level.threshold=0.60)
-  plot(epitmp)
-  title(main=aps)
+  
+  # Plotting structure:
+  #plot(epitmp)
+  #title(main=aps)
   
   # Discard seasons that are below threshold and rerun.
   # This is useful for properly defining activity levels during an epidemic
@@ -55,6 +71,14 @@ for (aps in apsids){
   episeasons <- seasons[! seasons %in% discard]
   epitmp <- epimem(i.data=subset(dfsimple[dfsimple$APS==aps,], select=episeasons),
                    i.n.max=10, i.level=0.60, i.level.threshold=0.60)
+  
+  # Store full report in epithresholds:
   epithresholds <- rbind(epithresholds, list(epitmp))
+  
+  # Store epidemic thresholds
   dfthresholds$pre[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[1,3]
+  dfthresholds$pos[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[2,3]
+  dfthresholds$mid[dfthresholds$aps==aps] <- epitmp$epi.intervals[1,4]
+  dfthresholds$high[dfthresholds$aps==aps] <- epitmp$epi.intervals[2,4]
+  dfthresholds$veryhigh[dfthresholds$aps==aps] <- epitmp$epi.intervals[3,4]
 }
