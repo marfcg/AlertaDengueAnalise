@@ -1,4 +1,4 @@
-R packages:
+R packages for main functions:
 mem
 plyr
 logging
