@@ -8,9 +8,9 @@ using MEM package https://cran.r-project.org/web/packages/mem/
                intensity thresholds
 "
 
-library(mem)
-library(plyr)
-library(logging)
+require(mem)
+require(plyr)
+require(logging)
 
 # Initialize logger
 basicConfig()
