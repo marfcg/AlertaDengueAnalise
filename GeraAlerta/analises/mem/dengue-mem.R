@@ -1,4 +1,4 @@
-'''
+"
 Reads historical incidence data and extract epidemic thresholds per AP,
 using MEM package https://cran.r-project.org/web/packages/mem/
 
@@ -6,15 +6,23 @@ using MEM package https://cran.r-project.org/web/packages/mem/
 :epithresholds: list with full epimem report for each ap, in the same order as apsids
 :dfthresholds: dataframe with epidemic threhsold per AP, with pre, pos, mid, high and very high
                intensity thresholds
-'''
+"
 
 library(mem)
 library(plyr)
+library(logging)
 
-bindseason <- function(df1, df2, baseyear){
+# Initialize logger
+basicConfig()
+addHandler(writeToFile, file="./dengue-mem.log", level='INFO')
+bindseason <- function(df1=data.frame(), df2=data.frame(), baseyear=integer()){
   # Function to bind season incidences, placing each season in a colum
-  
-  ti <- (baseyear+1)*100
+  if (missing(df1) | missing(df2) | missing(baseyear)){
+    logerror('missing argument on function call', logger='dengue-mem.bindseason')
+    return(NULL)
+  }
+
+    ti <- (baseyear+1)*100
   tf <- (baseyear+1)*100 + 27
   df3 <- cbind(df2, df1[(df1$SE > max(df1$SE[df1$SE<ti])-26 & df1$SE < tf),
                       c('SE', 'inc')])
@@ -24,6 +32,55 @@ bindseason <- function(df1, df2, baseyear){
   df3 <- rename(df3, c('SE'=newse, 'inc'=newinc))
   
   return(df3)
+}
+
+applymem <- function(df.data){
+  if (missing(df.data)){
+    logerror('missing argument on function call', logger='dengue-mem.applymem')
+    return(NULL)
+  }
+  
+  # List of APSs
+  apsids <- unique(df.data$APS)
+  
+  # Apply mem algorithm to obtain epidemic thresholds, using 0.60 confidence interval
+  epithresholds <- list()
+  dfthresholds <- data.frame(apsids)
+  dfthresholds <- rename(dfthresholds, c('apsids'='aps'))
+  dfthresholds['pre'] <- NULL
+  dfthresholds['pos'] <- NULL
+  dfthresholds['mid'] <- NULL
+  dfthresholds['high'] <- NULL
+  dfthresholds['veryhigh'] <- NULL
+  for (aps in apsids){
+    # Firstly, use all seasons
+    epitmp <- epimem(i.data=subset(df.data[df.data$APS==as.character(aps),], select=seasons),
+                     i.n.max=10, i.level=0.60, i.level.threshold=0.60)
+    
+    # Discard seasons that are below threshold and rerun.
+    # This is useful for properly defining activity levels during an epidemic
+    discard <- NULL
+    #for (ss in season){
+    #  # Obtain seasons below threshold 
+    #  # discard <- 
+    #}
+    episeasons <- seasons[! seasons %in% discard]
+    epitmp <- epimem(i.data=subset(df.data[df.data$APS==aps,], select=episeasons),
+                     i.n.max=10, i.level=0.60, i.level.threshold=0.60)
+    
+    # Store full report in epithresholds:
+    epithresholds[[aps]] <- epitmp
+    
+    # Store epidemic thresholds
+    dfthresholds$pre[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[1,3]
+    dfthresholds$pos[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[2,3]
+    dfthresholds$mid[dfthresholds$aps==aps] <- epitmp$epi.intervals[1,4]
+    dfthresholds$high[dfthresholds$aps==aps] <- epitmp$epi.intervals[2,4]
+    dfthresholds$veryhigh[dfthresholds$aps==aps] <- epitmp$epi.intervals[3,4]
+    
+  }
+  loginfo('Function executed and exited with status 0', logger='dengue-mem.applymem')
+  return(list("epimemthresholds"=epithresholds, "dfthresholds"=dfthresholds))
 }
 
 # Read historical data
@@ -40,45 +97,12 @@ for (i in 2011:2014){
   seasons <- cbind(seasons, paste0('inc',i,'-',i+1))
 }
 
-# List of APSs
-apsids <- unique(dfsimple$APS)
+thresholds <- applymem(dfsimple)
+# Plotting structure:
 
-# Apply mem algorithm to obtain epidemic thresholds, using 0.60 confidence interval
-epithresholds <- NULL
-dfthresholds <- data.frame(apsids)
-dfthresholds <- rename(dfthresholds, c('apsids'='aps'))
-dfthresholds['pre'] <- NULL
-dfthresholds['pos'] <- NULL
-dfthresholds['mid'] <- NULL
-dfthresholds['high'] <- NULL
-dfthresholds['veryhigh'] <- NULL
-for (aps in apsids){
-  # Firstly, use all seasons
-  epitmp <- epimem(i.data=subset(dfsimple[dfsimple$APS==as.character(aps),], select=seasons),
-                   i.n.max=10, i.level=0.60, i.level.threshold=0.60)
-  
-  # Plotting structure:
-  #plot(epitmp)
-  #title(main=aps)
-  
-  # Discard seasons that are below threshold and rerun.
-  # This is useful for properly defining activity levels during an epidemic
-  discard <- NULL
-  #for (ss in season){
-  #  # Obtain seasons below threshold 
-  #  # discard <- 
-  #}
-  episeasons <- seasons[! seasons %in% discard]
-  epitmp <- epimem(i.data=subset(dfsimple[dfsimple$APS==aps,], select=episeasons),
-                   i.n.max=10, i.level=0.60, i.level.threshold=0.60)
-  
-  # Store full report in epithresholds:
-  epithresholds <- rbind(epithresholds, list(epitmp))
-  
-  # Store epidemic thresholds
-  dfthresholds$pre[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[1,3]
-  dfthresholds$pos[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[2,3]
-  dfthresholds$mid[dfthresholds$aps==aps] <- epitmp$epi.intervals[1,4]
-  dfthresholds$high[dfthresholds$aps==aps] <- epitmp$epi.intervals[2,4]
-  dfthresholds$veryhigh[dfthresholds$aps==aps] <- epitmp$epi.intervals[3,4]
+for (aps in unique(dfsimple$APS)){
+  sprintf("APS: %s\n", aps)
+  print(thresholds$epimemthresholds[[aps]])
+  plot(thresholds$epimemthresholds[[aps]])
+  title(main=aps)
 }
