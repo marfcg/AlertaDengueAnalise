@@ -2,3 +2,7 @@ R packages:
 mem
 plyr
 logging
+
+For Rmd script:
+reshape2
+ggplot2
