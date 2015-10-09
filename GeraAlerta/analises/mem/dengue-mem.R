@@ -29,21 +29,28 @@ bindseason <- function(df1=data.frame(), df2=data.frame(), baseyear=integer()){
   }
 
     ti <- (baseyear+1)*100
-  tf <- (baseyear+1)*100 + 27
-  df3 <- cbind(df2, df1[(df1$SE > max(df1$SE[df1$SE<ti])-26 & df1$SE < tf),
+  tf <- (baseyear+1)*100 + 41
+  df3 <- cbind(df2, df1[(df1$SE > max(df1$SE[df1$SE<ti])-12 & df1$SE < tf),
                       c('SE', 'inc')])
   suff <- paste(as.character(baseyear),as.character(baseyear+1), sep='-')
   newse <- paste0('SE',suff)
   newinc <- paste0('inc',suff)
   df3 <- rename(df3, c('SE'=newse, 'inc'=newinc))
   
+  loginfo('Function executed and exited with status 0', logger='dengue-mem.bindseason')
   return(df3)
 }
 
-applymem <- function(df.data){
+applymem <- function(df.data, l.seasons){
   "
   Function to apply epimem algorithm on df.data and generate full reports as well as a data frame
   with summary of relevant thresholds (pre, pos, mid, high, veryhigh)
+
+  Input:
+  :df.data: data frame with APS in a column named APS, and incidence seasons in each column
+            each row gives the incidence in each season, for each APS, for each week.
+  :l.seasons: vector with incidence columns to be used
+
   Returns:
   :epithresholds: list with full epimem report for each APS, keyed by AP's name.
   :dfthresholds: data frame with thresholds for each AP.
@@ -68,7 +75,7 @@ applymem <- function(df.data){
   dfthresholds['veryhigh'] <- NULL
   for (aps in apsids){
     # Firstly, use all seasons
-    epitmp <- epimem(i.data=subset(df.data[df.data$APS==as.character(aps),], select=seasons),
+    epitmp <- epimem(i.data=subset(df.data[df.data$APS==as.character(aps),], select=l.seasons),
                      i.n.max=10, i.level=0.60, i.level.threshold=0.60)
     
     # Discard seasons that are below threshold and rerun.
@@ -78,9 +85,9 @@ applymem <- function(df.data){
     #  # Obtain seasons below threshold 
     #  # discard <- 
     #}
-    episeasons <- seasons[! seasons %in% discard]
+    episeasons <- l.seasons[! l.seasons %in% discard]
     epitmp <- epimem(i.data=subset(df.data[df.data$APS==aps,], select=episeasons),
-                     i.n.max=10, i.level=0.60, i.level.threshold=0.60)
+                     i.n.max=20, i.level=0.60, i.level.threshold=0.60)
     
     # Store full report in epithresholds:
     epithresholds[[aps]] <- epitmp
@@ -97,30 +104,32 @@ applymem <- function(df.data){
   return(list("epimemthresholds"=epithresholds, "dfthresholds"=dfthresholds))
 }
 
-"
-Example of usage, based on ./alertaAPS_201539.csv input file.
-Applies method and generate full report and plots for each AP.
-"
-# Read historical data
-dfcomplete <- read.csv('./alertaAPS_201539.csv')
-
-# Store only necessary data, separating seasons by columns
-dfsimple <- dfcomplete[dfcomplete$SE > max(dfcomplete$SE[dfcomplete$SE<201100])-26 &
-                         dfcomplete$SE < 201127,
-                       c('APS', 'SE', 'inc')]
-dfsimple <- rename(dfsimple, c('SE'='SE2010-2011', 'inc'='inc2010-2011'))
-seasons <- c('inc2010-2011')
-for (i in 2011:2014){
-  dfsimple <- bindseason(dfcomplete, dfsimple, i)
-  seasons <- cbind(seasons, paste0('inc',i,'-',i+1))
-}
-
-thresholds <- applymem(dfsimple)
-# Plotting structure:
-
-for (aps in unique(dfsimple$APS)){
-  sprintf("APS: %s\n", aps)
-  print(thresholds$epimemthresholds[[aps]])
-  plot(thresholds$epimemthresholds[[aps]])
-  title(main=aps)
-}
+# "
+# Example of usage, based on ./alertaAPS_201539.csv input file.
+# Applies method and generate full report and plots for each AP.
+# "
+# # Read historical data
+# dfcomplete <- read.csv('./alertaAPS_201539.csv')
+# 
+# # Store only necessary data, separating seasons by columns
+# dfsimple <- dfcomplete[dfcomplete$SE > max(dfcomplete$SE[dfcomplete$SE<201100])-12 &
+#                          dfcomplete$SE < 201141,
+#                        c('APS', 'SE', 'inc')]
+# dfsimple <- rename(dfsimple, c('SE'='SE2010-2011', 'inc'='inc2010-2011'))
+# seasons <- c('inc2010-2011')
+# for (i in 2011:2014){
+#   if (max(dfcomplete$SE) >= (i+1)*100 + 41){
+#     dfsimple <- bindseason(dfcomplete, dfsimple, i)
+#     seasons <- cbind(seasons, paste0('inc',i,'-',i+1))
+#   }
+# }
+# 
+# thresholds <- applymem(dfsimple)
+# # Plotting structure:
+# 
+# for (aps in unique(dfsimple$APS)){
+#   sprintf("APS: %s\n", aps)
+#   print(thresholds$epimemthresholds[[aps]])
+#   plot(thresholds$epimemthresholds[[aps]])
+#   title(main=aps)
+# }

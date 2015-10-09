@@ -7,35 +7,58 @@ output: pdf_document
 
 Relatório dos limiares epidêmicos obtidos para incidência de Dengue nas APS do Rio de Janeiro, com base em dados de 2010 à 2015 e com uso da ferramenta MEM.
 
-```{r, echo=FALSE, warning=FALSE, error=FALSE, info=FALSE}
+```{r, echo=FALSE, warning=FALSE, error=FALSE, info=FALSE, message=FALSE, results='hide'}
 library(plyr)
 source('./dengue-mem.R')
 # Read historical data
 dfcomplete <- read.csv('alertaAPS_201539.csv')
 
 # Store only necessary data, separating seasons by columns
-dfsimple <- dfcomplete[dfcomplete$SE > max(dfcomplete$SE[dfcomplete$SE<201100])-26 &
-                         dfcomplete$SE < 201127,
+dfsimple <- dfcomplete[dfcomplete$SE > max(dfcomplete$SE[dfcomplete$SE<201100])-12 &
+                         dfcomplete$SE < 201141,
                        c('APS', 'SE', 'inc')]
 dfsimple <- rename(dfsimple, c('SE'='SE2010-2011', 'inc'='inc2010-2011'))
 seasons <- c('inc2010-2011')
 for (i in 2011:2014){
-  dfsimple <- bindseason(dfcomplete, dfsimple, i)
-  seasons <- cbind(seasons, paste0('inc',i,'-',i+1))
+  if (max(dfcomplete$SE) >= (i+1)*100 + 41){
+    dfsimple <- bindseason(dfcomplete, dfsimple, i)
+    seasons <- cbind(seasons, paste0('inc',i,'-',i+1))
+  }
 }
 
-thresholds <- applymem(dfsimple)
+thresholds <- applymem(dfsimple, seasons)
 ```
 
-You can also embed plots, for example:
 
-```{r, echo=FALSE, warning=FALSE, error=FALSE, info=FALSE}
+```{r, echo=FALSE, warning=FALSE, error=FALSE, info=FALSE, message=FALSE}
 # Plotting structure:
+require(ggplot2)
+require(reshape2)
 
-for (aps in unique(dfsimple$APS)){
-  cat("APS: ", aps)
-  print(thresholds$epimemthresholds[[aps]])
-  plot(thresholds$epimemthresholds[[aps]])
-  title(main=aps)
+dfsimple['Pre-epi. thresh.'] <- NULL
+dfsimple['Post-epi. thresh.'] <- NULL
+dfsimple$`Pre-epi. thresh.`[dfsimple$APS=='AP1'] <- thresholds$dfthresholds$pre[thresholds$dfthresholds$aps=='AP1']
+dfsimple$`Post-epi. thresh.`[dfsimple$APS=='AP1'] <- thresholds$dfthresholds$pos[thresholds$dfthresholds$aps=='AP1']
+
+for (apsid in unique(dfsimple$APS)){
+  dfsimple$`Pre-epi. thresh.`[dfsimple$APS==apsid] <- thresholds$dfthresholds$pre[thresholds$dfthresholds$aps==apsid]
+  dfsimple$`Post-epi. thresh.`[dfsimple$APS==apsid] <- thresholds$dfthresholds$pos[thresholds$dfthresholds$aps==apsid]
+  dftmp <- dfsimple[dfsimple$APS==apsid,
+                    cbind(seasons, 'Pre-epi. thresh.', 'Post-epi. thresh.')]
+  dftmp <- melt(dftmp, variable.name = 'Season')
+  dftmp['t'] = seq(1,52)
+  dftmp <- rename(dftmp, c('value'='Incidence'))
+  plt <- ggplot(dftmp, aes(t, Incidence)) + geom_line(aes(colour=Season)) + ggtitle(apsid) +scale_x_continuous(breaks=seq(0,55,5), limits=c(1,52))
+  print(plt)
+  cat("APS: ", apsid, "\n")
+  print(thresholds$epimemthresholds[[apsid]])
+  cat("\n")
 }
+
+# for (aps in unique(dfsimple$APS)){
+#   cat("APS: ", apsid)
+#   print(thresholds$epimemthresholds[[aps]])
+#   plot(thresholds$epimemthresholds[[aps]])
+#   title(main=aps)
+#}
 ```
