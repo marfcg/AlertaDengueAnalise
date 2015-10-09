@@ -1,4 +1,8 @@
-R packages:
+R packages for main functions:
 mem
 plyr
 logging
+
+For Rmd script:
+reshape2
+ggplot2
