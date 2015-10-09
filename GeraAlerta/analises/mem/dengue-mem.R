@@ -16,7 +16,13 @@ library(logging)
 basicConfig()
 addHandler(writeToFile, file="./dengue-mem.log", level='INFO')
 bindseason <- function(df1=data.frame(), df2=data.frame(), baseyear=integer()){
-  # Function to bind season incidences, placing each season in a colum
+  "
+  Function to bind season incidences from df1 onto df2, placing each season in a new colum
+  Returns:
+  :df3: data.frame df2 with 2 new colums from df1$SE and df1$inc based on df1$SE within season
+        of base year, which is from winter of baseyear to winter of baseyear+1 (south hemisphere).
+  "
+  
   if (missing(df1) | missing(df2) | missing(baseyear)){
     logerror('missing argument on function call', logger='dengue-mem.bindseason')
     return(NULL)
@@ -35,7 +41,15 @@ bindseason <- function(df1=data.frame(), df2=data.frame(), baseyear=integer()){
 }
 
 applymem <- function(df.data){
-  if (missing(df.data)){
+  "
+  Function to apply epimem algorithm on df.data and generate full reports as well as a data frame
+  with summary of relevant thresholds (pre, pos, mid, high, veryhigh)
+  Returns:
+  :epithresholds: list with full epimem report for each APS, keyed by AP's name.
+  :dfthresholds: data frame with thresholds for each AP.
+  "
+
+    if (missing(df.data)){
     logerror('missing argument on function call', logger='dengue-mem.applymem')
     return(NULL)
   }
@@ -83,8 +97,12 @@ applymem <- function(df.data){
   return(list("epimemthresholds"=epithresholds, "dfthresholds"=dfthresholds))
 }
 
+"
+Example of usage, based on ./alertaAPS_201539.csv input file.
+Applies method and generate full report and plots for each AP.
+"
 # Read historical data
-dfcomplete <- read.csv('alertaAPS_201539.csv')
+dfcomplete <- read.csv('./alertaAPS_201539.csv')
 
 # Store only necessary data, separating seasons by columns
 dfsimple <- dfcomplete[dfcomplete$SE > max(dfcomplete$SE[dfcomplete$SE<201100])-26 &
