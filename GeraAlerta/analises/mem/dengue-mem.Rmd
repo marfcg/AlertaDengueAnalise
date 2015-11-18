@@ -7,6 +7,10 @@ output: pdf_document
 
 Relatório dos limiares epidêmicos obtidos para incidência de Dengue nas APS do Rio de Janeiro, com base em dados de 2010 à 2015 e com uso da ferramenta MEM.
 
+Janela temporal utilizada para definir a temporada anual de dengue: semana 41 do ano base à semana 40 do ano seguinte.
+Definição obtida através de inspeção visual das séries temporais, buscando centralizar o pico de incidência.
+
+
 ```{r, echo=FALSE, warning=FALSE, error=FALSE, info=FALSE, message=FALSE, results='hide'}
 require(plyr)
 source('./dengue-mem.R')
