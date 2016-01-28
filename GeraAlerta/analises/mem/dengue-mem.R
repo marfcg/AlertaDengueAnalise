@@ -80,11 +80,16 @@ applymem <- function(df.data, l.seasons){
     
     # Discard seasons that are below threshold and rerun.
     # This is useful for properly defining activity levels during an epidemic
+    # WORK IN PROGRESS
     discard <- NULL
-    #for (ss in season){
-    #  # Obtain seasons below threshold 
-    #  # discard <- 
-    #}
+    prethreshold <- epitmp$pre.post.intervals[1,3]
+    for (ss in l.seasons){
+      # Obtain seasons below threshold
+      maxinc <- max(df.data[df.data$APS==as.character(aps), ss])
+      if (maxinc < prethreshold){
+        discard <- cbind(discard, ss)
+      }
+    }
     episeasons <- l.seasons[! l.seasons %in% discard]
     epitmp <- epimem(i.data=subset(df.data[df.data$APS==aps,], select=episeasons),
                      i.n.max=20, i.level=0.60, i.level.threshold=0.60)
