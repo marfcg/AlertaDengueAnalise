@@ -76,7 +76,7 @@ applymem <- function(df.data, l.seasons){
   for (aps in apsids){
     # Firstly, use all seasons
     epitmp <- epimem(i.data=subset(df.data[df.data$APS==as.character(aps),], select=l.seasons),
-                     i.n.max=10, i.level=0.60, i.level.threshold=0.60)
+                     i.n.max=10, i.level=0.60, i.level.threshold=0.60, i.type.curve=6)
     
     # Discard seasons that are below threshold and rerun.
     # This is useful for properly defining activity levels during an epidemic
