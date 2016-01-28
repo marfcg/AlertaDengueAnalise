@@ -34,7 +34,7 @@ bindseason <- function(df1=data.frame(), df2=data.frame(), baseyear=integer()){
                       c('SE', 'inc')])
   suff <- paste(as.character(baseyear),as.character(baseyear+1), sep='-')
   newse <- paste0('SE',suff)
-  newinc <- paste0('inc',suff)
+  newinc <- suff
   df3 <- rename(df3, c('SE'=newse, 'inc'=newinc))
   
   loginfo('Function executed and exited with status 0', logger='dengue-mem.bindseason')
@@ -66,23 +66,41 @@ applymem <- function(df.data, l.seasons){
   
   # Apply mem algorithm to obtain epidemic thresholds, using 0.60 confidence interval
   epithresholds <- list()
+  df.typ.real.curve <-data.frame()
   dfthresholds <- data.frame(apsids)
   dfthresholds <- rename(dfthresholds, c('apsids'='aps'))
+  
   dfthresholds['pre'] <- NULL
   dfthresholds['pos'] <- NULL
   dfthresholds['mid'] <- NULL
   dfthresholds['high'] <- NULL
   dfthresholds['veryhigh'] <- NULL
+  dfthresholds['inicio'] <- NULL
+  dfthresholds['duracao'] <- NULL
+  
+  # Model parameters:
+  par.type.curve <- 2
+  par.n.max <- 60
+  par.level.curve <- 0.90
+  par.level.threshold <- 0.90
+  
   for (aps in apsids){
     # Firstly, use all seasons
-    epitmp <- epimem(i.data=subset(df.data[df.data$APS==as.character(aps),], select=l.seasons),
-                     i.n.max=10, i.level=0.60, i.level.threshold=0.60, i.type.curve=6)
+    epitmp <- memmodel(i.data=subset(df.data[df.data$APS==as.character(aps),], select=l.seasons),
+                     i.n.max=par.n.max, i.level.curve=par.level.curve, i.level.threshold=par.level.threshold,
+                     i.type.curve=par.type.curve)
     
     # Discard seasons that are below threshold and rerun.
     # This is useful for properly defining activity levels during an epidemic
-    # WORK IN PROGRESS
     discard <- NULL
     prethreshold <- epitmp$pre.post.intervals[1,3]
+    typ.real.curve <- rename(data.frame(epitmp$typ.real.curve), c('X1'='baixo', 'X2'='mediano' ,'X3'='alto'))
+    # Clean typical curve:
+    typ.real.curve$mediano[is.na(typ.real.curve$mediano)] <- 0
+    typ.real.curve$baixo[typ.real.curve$baixo < 0] <- 0
+    typ.real.curve$baixo[is.na(typ.real.curve$baixo)] <- typ.real.curve$mediano[is.na(typ.real.curve$baixo)]
+    typ.real.curve$alto[is.na(typ.real.curve$alto)] <- typ.real.curve$mediano[is.na(typ.real.curve$alto)]
+    
     for (ss in l.seasons){
       # Obtain seasons below threshold
       maxinc <- max(df.data[df.data$APS==as.character(aps), ss])
@@ -91,18 +109,31 @@ applymem <- function(df.data, l.seasons){
       }
     }
     episeasons <- l.seasons[! l.seasons %in% discard]
-    epitmp <- epimem(i.data=subset(df.data[df.data$APS==aps,], select=episeasons),
-                     i.n.max=20, i.level=0.60, i.level.threshold=0.60)
+    epitmp <- memmodel(i.data=subset(df.data[df.data$APS==aps,], select=episeasons),
+                     i.n.max=par.n.max, i.level.curve=par.level.curve, i.level.threshold=par.level.threshold,
+                     i.type.curve=par.type.curve)
     
     # Store full report in epithresholds:
     epithresholds[[aps]] <- epitmp
     
+    # Store typical curves from full set of seasons
+    epithresholds$typ.real.curve[[aps]] <- typ.real.curve
+    epithresholds$typ.real.curve[[aps]]['SE'] <- c(seq(41,52), seq(1,40))
+      
     # Store epidemic thresholds
     dfthresholds$pre[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[1,3]
     dfthresholds$pos[dfthresholds$aps==aps] <- epitmp$pre.post.intervals[2,3]
     dfthresholds$mid[dfthresholds$aps==aps] <- epitmp$epi.intervals[1,4]
     dfthresholds$high[dfthresholds$aps==aps] <- epitmp$epi.intervals[2,4]
     dfthresholds$veryhigh[dfthresholds$aps==aps] <- epitmp$epi.intervals[3,4]
+    dfthresholds$inicio[dfthresholds$aps==aps] <- (epitmp$mean.start - 1 + 41) %% 52
+    ci.start.i <- (epitmp$ci.start[1,1] - 1 + 41) %% 52
+    ci.start.f <- (epitmp$ci.start[1,3] - 1 + 41) %% 52
+    dfthresholds$inicio.ic[dfthresholds$aps==aps] <- paste0('[', ci.start.i, '-',
+                                                            ci.start.f, ']')
+    dfthresholds$duracao[dfthresholds$aps==aps] <- epitmp$mean.length
+    dfthresholds$duracao.ic[dfthresholds$aps==aps] <- paste0('[', epitmp$ci.length[2,1], '-',
+                                                              epitmp$ci.length[2,3], ']')
     
   }
   loginfo('Function executed and exited with status 0', logger='dengue-mem.applymem')

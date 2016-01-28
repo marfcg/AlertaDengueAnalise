@@ -15,24 +15,31 @@ Limiares para níveis de atividade obtidos utilizando apenas as temporadas consi
 
 ```{r, echo=FALSE, warning=FALSE, error=FALSE, info=FALSE, message=FALSE, results='hide'}
 require(plyr)
+#require(dplyr)
 source('./dengue-mem.R')
 # Read historical data
-dfcomplete <- read.csv('alertaAPS_201539.csv')
+dfcomplete <- read.csv('alertaAPS_201602.csv')[,c('APS', 'SE', 'inc', 'casos_est')]
+dfpop <- read.csv('populacao2010porAPS_RJ.csv')
+popRJ = sum(dfpop$Pop2010)
+df.aggregate <- aggregate(casos_est ~ SE, data = dfcomplete, sum, na.action = na.pass)
+df.aggregate['APS'] <- 'Município do Rio de Janeiro'
+df.aggregate['inc'] <- df.aggregate$casos_est * 100000 / popRJ
+dfcomplete <- rbind(dfcomplete, df.aggregate)
 
 # Store only necessary data, separating seasons by columns
 dfsimple <- dfcomplete[dfcomplete$SE > max(dfcomplete$SE[dfcomplete$SE<201100])-12 &
-                         dfcomplete$SE < 201141,
-                       c('APS', 'SE', 'inc')]
-dfsimple <- rename(dfsimple, c('SE'='SE2010-2011', 'inc'='inc2010-2011'))
-seasons <- c('inc2010-2011')
-for (i in 2011:2014){
+                         dfcomplete$SE < 201141, c('APS', 'SE', 'inc')]
+dfsimple <- rename(dfsimple, c('SE'='SE2010-2011', 'inc'='2010-2011'))
+seasons <- c('2010-2011')
+for (i in 2011:2015){
   if (max(dfcomplete$SE) >= (i+1)*100 + 41){
     dfsimple <- bindseason(dfcomplete, dfsimple, i)
-    seasons <- cbind(seasons, paste0('inc',i,'-',i+1))
+    seasons <- cbind(seasons, paste0(i,'-',i+1))
   }
 }
 
 thresholds <- applymem(dfsimple, seasons)
+
 ```
 
 
@@ -43,8 +50,8 @@ require(reshape2)
 
 dfsimple['Pre-epi. thresh.'] <- NULL
 dfsimple['Post-epi. thresh.'] <- NULL
-dfsimple$`Pre-epi. thresh.`[dfsimple$APS=='AP1'] <- thresholds$dfthresholds$pre[thresholds$dfthresholds$aps=='AP1']
-dfsimple$`Post-epi. thresh.`[dfsimple$APS=='AP1'] <- thresholds$dfthresholds$pos[thresholds$dfthresholds$aps=='AP1']
+#dfsimple$`Pre-epi. thresh.`[dfsimple$APS=='AP1'] <- thresholds$dfthresholds$pre[thresholds$dfthresholds$aps=='AP1']
+#dfsimple$`Post-epi. thresh.`[dfsimple$APS=='AP1'] <- thresholds$dfthresholds$pos[thresholds$dfthresholds$aps=='AP1']
 
 for (apsid in unique(dfsimple$APS)){
   dfsimple$`Pre-epi. thresh.`[dfsimple$APS==apsid] <- thresholds$dfthresholds$pre[thresholds$dfthresholds$aps==apsid]
@@ -52,19 +59,53 @@ for (apsid in unique(dfsimple$APS)){
   dftmp <- dfsimple[dfsimple$APS==apsid,
                     cbind(seasons, 'Pre-epi. thresh.', 'Post-epi. thresh.')]
   dftmp <- melt(dftmp, variable.name = 'Season')
-  dftmp['t'] = seq(1,52)
+  dftmp['SE'] = c(seq(41,52), seq(1,40))
   dftmp <- rename(dftmp, c('value'='Incidence'))
-  plt <- ggplot(dftmp, aes(t, Incidence)) + geom_line(aes(colour=Season)) + ggtitle(apsid) +scale_x_continuous(breaks=seq(0,55,5), limits=c(1,52))
+  
+  epi.inicio <- thresholds$dfthresholds$inicio[thresholds$dfthresholds$aps==apsid]
+  epi.fim <- (epi.inicio + thresholds$dfthresholds$duracao[thresholds$dfthresholds$aps==apsid]) %% 52
+  
+  plt <- ggplot(dftmp, aes(SE, Incidence)) + 
+    geom_ribbon(data=thresholds$epimemthresholds$typ.real.curve[[apsid]], aes(x=SE, ymin=0, ymax=baixo), 
+                inherit.aes=FALSE, fill="green", alpha=0.35) +
+    geom_ribbon(data=thresholds$epimemthresholds$typ.real.curve[[apsid]], aes(x=SE, ymin=baixo, ymax=mediano), 
+                inherit.aes=FALSE, fill="yellow", alpha=0.35) +
+    geom_ribbon(data=thresholds$epimemthresholds$typ.real.curve[[apsid]], aes(x=SE, ymin=mediano, ymax=alto), 
+                inherit.aes=FALSE, fill="orange", alpha=0.35) +
+    geom_ribbon(data=thresholds$epimemthresholds$typ.real.curve[[apsid]], aes(x=SE, ymin=alto, ymax=Inf), 
+                inherit.aes=FALSE, fill="red", alpha=0.35) +
+    geom_line(aes(colour=Season), alpha=1) + ggtitle(apsid) + 
+    scale_x_continuous(breaks=seq(0,55,5), limits=c(1,52)) + geom_vline(xintercept=c(epi.inicio,epi.fim),
+                                                                        linetype="dotted")
+    
   print(plt)
-  cat("APS: ", apsid, "\n")
-  print(thresholds$epimemthresholds[[apsid]])
-  cat("\n")
+  #cat("APS: ", apsid, "\n")
+  #print(thresholds$epimemthresholds[[apsid]])
+  cat("  \n  \n  \n")
 }
 
-# for (aps in unique(dfsimple$APS)){
+#for (aps in unique(dfsimple$APS)){
 #   cat("APS: ", apsid)
 #   print(thresholds$epimemthresholds[[aps]])
 #   plot(thresholds$epimemthresholds[[aps]])
 #   title(main=aps)
 #}
+```
+
+```{r, echo=FALSE, warning=FALSE, error=FALSE, info=FALSE, message=FALSE}
+require(pander)
+panderOptions('table.split.table', Inf)
+panderOptions('graph.legend.position', 'right')
+tab <-thresholds$dfthresholds[c('aps', 'pre', 'pos', 'mid', 'high', 'veryhigh')]
+names(tab) <- c('Região', 'Limiar pré-epidêmico', 'Limiar pós-epidêmico', 'Limiar de atividade baixa (40%)',
+                'Limiar de atividade alta (90%)', 'Limiar de atividade muito alta (97.5%)')
+                
+pander(tab, keep.line.breaks=TRUE, caption=paste0('Limiares de incidência (por 100mil habitantes)',
+                                                  ' por região.'))
+cat('  \n  \n')
+tab <-thresholds$dfthresholds[c('aps', 'inicio', 'inicio.ic', 'duracao', 'duracao.ic')]
+names(tab) <- c('Região', 'SE típica de início  de atividade elevada', 'IC', 'Duração típica',
+                'IC')
+pander(tab, keep.line.breaks=TRUE, caption=paste0('Semana epidemiológica típica de início e duração do período',
+                                                  ' de atividade elevada, por região.'))
 ```
